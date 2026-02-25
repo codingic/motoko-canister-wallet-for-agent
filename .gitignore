@@ -1,0 +1,23 @@
+.DS_Store
+
+# Local env
+.env
+.env.*
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# DFX / generated artifacts
+.dfx/
+src/declarations/
+
+# Motoko / mops local cache
+.mops/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
