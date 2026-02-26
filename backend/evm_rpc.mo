@@ -617,7 +617,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl,
       Text.encodeUtf8(bodyText),
-      64 * 1024 : Nat64,
+      rpc_max_response_bytes_for_method(method),
       "evm rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -672,6 +672,23 @@ module {
       };
     };
     #Ok("0x" # to_lower_hex_text(hex))
+  };
+
+  // Lower response caps reduce required canister-http attached cycles.
+  // EVM JSON-RPC responses in these methods are typically tiny.
+  func rpc_max_response_bytes_for_method(method : Text) : Nat64 {
+    switch (method) {
+      case ("eth_chainId") 2 * 1024 : Nat64;
+      case ("eth_blockNumber") 2 * 1024 : Nat64;
+      case ("eth_gasPrice") 2 * 1024 : Nat64;
+      case ("eth_maxPriorityFeePerGas") 2 * 1024 : Nat64;
+      case ("eth_getTransactionCount") 2 * 1024 : Nat64;
+      case ("eth_getBalance") 2 * 1024 : Nat64;
+      case ("eth_sendRawTransaction") 4 * 1024 : Nat64;
+      case ("eth_call") 8 * 1024 : Nat64;
+      case ("eth_getBlockByNumber") 8 * 1024 : Nat64; // params use false (no tx objects)
+      case (_) 16 * 1024 : Nat64;
+    }
   };
 
   func hex_address_to_20_bytes(value : Text) : Error.WalletResult<[Nat8]> {

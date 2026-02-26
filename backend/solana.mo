@@ -912,7 +912,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl,
       Text.encodeUtf8(bodyText),
-      32 * 1024 : Nat64,
+      solana_rpc_max_response_bytes_for_method(method),
       "solana rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -951,6 +951,18 @@ module {
     switch (json_object_field(payload, "result")) {
       case (?v) #Ok(v);
       case null #Err(#Internal("solana rpc response missing result"));
+    }
+  };
+
+  func solana_rpc_max_response_bytes_for_method(method : Text) : Nat64 {
+    switch (method) {
+      case ("getBalance") 4 * 1024 : Nat64;
+      case ("getLatestBlockhash") 8 * 1024 : Nat64;
+      case ("getTokenSupply") 8 * 1024 : Nat64;
+      case ("getTokenAccountBalance") 8 * 1024 : Nat64;
+      case ("getTokenAccountsByOwner") 48 * 1024 : Nat64;
+      case ("sendTransaction") 8 * 1024 : Nat64;
+      case (_) 16 * 1024 : Nat64;
     }
   };
 

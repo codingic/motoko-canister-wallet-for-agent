@@ -585,6 +585,210 @@ select {
   font-size: 1.05rem;
 }
 
+.rpc-manager-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.rpc-manager-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 11, 17, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.rpc-manager-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  padding: 1rem 1rem 1.25rem;
+  border-color: rgba(102, 200, 255, 0.2);
+  overflow-y: auto;
+}
+
+.rpc-manager-modal__shell {
+  width: min(1440px, calc(100vw - 2rem));
+  margin: 0 auto;
+  min-height: calc(100vh - 2rem);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+}
+
+.rpc-manager-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(133, 179, 214, 0.14);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(13, 26, 39, 0.78), rgba(8, 17, 26, 0.88)),
+    rgba(10, 20, 31, 0.82);
+  box-shadow: var(--shadow);
+}
+
+.rpc-manager-modal__head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.2rem;
+}
+
+.rpc-manager-modal__sub {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.rpc-manager-modal__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rpc-manager-modal__body {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.rpc-manager-alert {
+  border: 1px solid rgba(246, 191, 103, 0.35);
+  border-radius: 0.9rem;
+  background: rgba(246, 191, 103, 0.08);
+  color: #ffe4b5;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.84rem;
+}
+
+.rpc-manager-list {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.rpc-manager-row {
+  border: 1px solid rgba(133, 179, 214, 0.14);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(13, 26, 39, 0.68), rgba(8, 17, 26, 0.84)),
+    rgba(10, 20, 31, 0.82);
+  box-shadow: var(--shadow);
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.rpc-manager-row__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.rpc-manager-row__title {
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.rpc-manager-row__meta {
+  margin-top: 0.28rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.rpc-manager-row__meta code {
+  font-family: var(--font-mono);
+  color: #d8f4ff;
+  background: rgba(7, 15, 23, 0.76);
+  border: 1px solid rgba(133, 179, 214, 0.12);
+  border-radius: 999px;
+  padding: 0.15rem 0.42rem;
+}
+
+.rpc-manager-row__meta span {
+  border: 1px solid rgba(133, 179, 214, 0.12);
+  border-radius: 999px;
+  padding: 0.15rem 0.42rem;
+  background: rgba(7, 15, 23, 0.55);
+}
+
+.rpc-manager-row__badges {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.rpc-manager-row__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.rpc-manager-kv {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rpc-manager-kv--full {
+  grid-column: 1 / -1;
+}
+
+.rpc-manager-kv__value {
+  min-height: 3rem;
+  white-space: pre-wrap;
+}
+
+.rpc-manager-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rpc-manager-field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  color: var(--ink);
+  background: rgba(7, 15, 23, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.rpc-manager-field input:focus-visible {
+  outline: 2px solid rgba(102, 200, 255, 0.35);
+  outline-offset: 2px;
+}
+
+.rpc-manager-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(133, 179, 214, 0.12);
+  padding-top: 0.7rem;
+}
+
+.rpc-manager-row__hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .token-detail-modal {
   position: fixed;
   inset: 0;
@@ -905,6 +1109,10 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .rpc-manager-row__grid {
+    grid-template-columns: 1fr;
+  }
+
   .token-detail-card--send {
     position: static;
   }
@@ -938,6 +1146,26 @@ select {
   }
 
   .topbar__actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .rpc-manager-modal__panel {
+    padding: 0.75rem 0.75rem 1rem;
+  }
+
+  .rpc-manager-modal__shell {
+    width: 100%;
+    min-height: calc(100vh - 1.5rem);
+  }
+
+  .rpc-manager-modal__head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rpc-manager-modal__head-actions {
     width: 100%;
     justify-content: space-between;
   }

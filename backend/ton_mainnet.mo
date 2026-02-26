@@ -248,7 +248,7 @@ module {
     switch (req.token) {
       case (?t) {
         if (Text.size(Text.trim(t, #char ' ')) > 0) {
-          return #Err(#InvalidInput("ton_transfer_ton does not accept token parameter"));
+          return #Err(#InvalidInput("ton_mainnet_transfer_ton does not accept token parameter"));
         };
       };
       case null {};
@@ -687,7 +687,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       url,
       Text.encodeUtf8(bodyText),
-      1024 * 1024 : Nat64,
+      ton_rpc_max_response_bytes_for_url(url, #post),
       "ton rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -868,7 +868,7 @@ module {
   };
 
   func ton_http_get_json(url : Text) : async Error.WalletResult<JsonAst.JSON> {
-    let httpRes = switch (await Outcall.get_json(url, 1024 * 1024 : Nat64, "ton rpc")) {
+    let httpRes = switch (await Outcall.get_json(url, ton_rpc_max_response_bytes_for_url(url, #get), "ton rpc")) {
       case (#Err(err)) return #Err(err);
       case (#Ok(resp)) resp;
     };
@@ -888,6 +888,19 @@ module {
       case null return #Err(#Internal("ton rpc parse response failed"));
     };
     #Ok(payload)
+  };
+
+  func ton_rpc_max_response_bytes_for_url(url : Text, method : Outcall.HttpMethod) : Nat64 {
+    if (Text.contains(url, #text "/getAddressBalance")) return 16 * 1024 : Nat64;
+    if (Text.contains(url, #text "/sendBocReturnHash")) return 32 * 1024 : Nat64;
+    if (Text.contains(url, #text "/sendBoc")) return 32 * 1024 : Nat64;
+    if (Text.contains(url, #text "/jetton/masters/")) return 64 * 1024 : Nat64;
+    if (Text.contains(url, #text "/jetton/wallets")) return 128 * 1024 : Nat64;
+    switch (method) {
+      case (#get) 128 * 1024 : Nat64;
+      case (#post) 128 * 1024 : Nat64;
+      case (_) 128 * 1024 : Nat64;
+    }
   };
 
   func ton_v2_url(path : Text, rpcOverride : ?Text) : Error.WalletResult<Text> {

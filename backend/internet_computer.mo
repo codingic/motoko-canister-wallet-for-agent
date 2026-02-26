@@ -55,7 +55,7 @@ module {
       case (#Ok(())) {};
     };
     if (non_empty_opt_text(req.token) != null) {
-      return #Err(#InvalidInput("icp_get_balance_icp does not accept token parameter"));
+      return #Err(#InvalidInput("internet_computer_get_balance_icp does not accept token parameter"));
     };
 
     let ledger = icp_ledger_principal();
@@ -129,7 +129,7 @@ module {
       case (#Ok(())) {};
     };
     if (non_empty_opt_text(req.token) != null) {
-      return #Err(#InvalidInput("icp_transfer_icp does not accept token parameter"));
+      return #Err(#InvalidInput("internet_computer_transfer_icp does not accept token parameter"));
     };
 
     let ledger = icp_ledger_principal();

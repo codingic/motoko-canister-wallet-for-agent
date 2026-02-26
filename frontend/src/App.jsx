@@ -237,6 +237,13 @@ function parseConfiguredToken(resp) {
   };
 }
 
+function parseConfiguredRpc(resp) {
+  return {
+    network: normalizeNetworkId(resp?.network || ''),
+    rpcUrl: resp?.rpc_url || ''
+  };
+}
+
 function parseConfiguredExplorer(resp) {
   return {
     network: normalizeNetworkId(resp?.network || ''),
@@ -286,8 +293,24 @@ function parseServiceInfo(info) {
 function parseWalletNetworkInfo(row) {
   const id = normalizeNetworkId(typeof row?.id === 'string' ? row.id : '');
   return {
-    id
+    id,
+    primarySymbol: row?.primary_symbol || '',
+    addressFamily: row?.address_family || '',
+    sharedAddressGroup: row?.shared_address_group || '',
+    supportsSend: Boolean(row?.supports_send),
+    supportsBalance: Boolean(row?.supports_balance),
+    defaultRpcUrl: readOpt(row?.default_rpc_url) || ''
   };
+}
+
+function sortNetworksByPreferredOrder(rows) {
+  const order = new Map(DEFAULT_NETWORK_ORDER.map((id, index) => [id, index]));
+  return [...rows].sort((a, b) => {
+    const ai = order.has(a.id) ? order.get(a.id) : Number.MAX_SAFE_INTEGER;
+    const bi = order.has(b.id) ? order.get(b.id) : Number.MAX_SAFE_INTEGER;
+    if (ai !== bi) return ai - bi;
+    return String(a.id).localeCompare(String(b.id));
+  });
 }
 
 async function loadBackendSnapshot() {
@@ -359,6 +382,59 @@ async function queryConfiguredTokens(actor, network) {
     return Array.isArray(rows) ? rows.map(parseConfiguredToken) : [];
   } catch {
     return [];
+  }
+}
+
+async function queryWalletNetworks(actor) {
+  const method = actor?.wallet_networks;
+  if (typeof method !== 'function') return [];
+  try {
+    const rows = await method();
+    const parsed = Array.isArray(rows) ? rows.map(parseWalletNetworkInfo) : [];
+    return sortNetworksByPreferredOrder(parsed.filter((row) => row.id));
+  } catch {
+    return [];
+  }
+}
+
+async function queryConfiguredRpcs(actor) {
+  const method = actor?.configured_rpcs;
+  if (typeof method !== 'function') return [];
+  try {
+    const rows = await method();
+    return Array.isArray(rows) ? rows.map(parseConfiguredRpc).filter((row) => row.network) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function upsertConfiguredRpc(actor, network, rpcUrl) {
+  const method = actor?.set_configured_rpc;
+  if (typeof method !== 'function') {
+    return { ok: false, error: '后端未暴露接口: set_configured_rpc' };
+  }
+  try {
+    const result = await method({ network, rpc_url: rpcUrl });
+    if (result?.Ok) return { ok: true, data: parseConfiguredRpc(result.Ok) };
+    if (result?.Err) return { ok: false, error: formatWalletError(result.Err) };
+    return { ok: false, error: '后端返回格式不识别' };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : '调用后端失败' };
+  }
+}
+
+async function deleteConfiguredRpc(actor, network) {
+  const method = actor?.remove_configured_rpc;
+  if (typeof method !== 'function') {
+    return { ok: false, error: '后端未暴露接口: remove_configured_rpc' };
+  }
+  try {
+    const result = await method({ network });
+    if (result?.Ok !== undefined) return { ok: true, removed: Boolean(result.Ok) };
+    if (result?.Err) return { ok: false, error: formatWalletError(result.Err) };
+    return { ok: false, error: '后端返回格式不识别' };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : '调用后端失败' };
   }
 }
 
@@ -591,9 +667,53 @@ export default function App() {
     data: null,
     error: ''
   });
+  const [isRpcManagerOpen, setIsRpcManagerOpen] = useState(false);
+  const [rpcManagerLoading, setRpcManagerLoading] = useState(false);
+  const [rpcManagerError, setRpcManagerError] = useState('');
+  const [rpcManagerRows, setRpcManagerRows] = useState([]);
+  const [rpcOverrideRows, setRpcOverrideRows] = useState([]);
+  const [rpcDraftByNetwork, setRpcDraftByNetwork] = useState({});
+  const [rpcSavingNetwork, setRpcSavingNetwork] = useState('');
+  const [rpcRemovingNetwork, setRpcRemovingNetwork] = useState('');
 
   const selectedConfig =
     NETWORK_CONFIG[selectedNetwork] || fallbackNetworkConfig(selectedNetwork);
+
+  const rpcOverrideMap = Object.fromEntries(
+    rpcOverrideRows.map((row) => [normalizeNetworkId(row.network), row.rpcUrl || ''])
+  );
+
+  const rpcManagerDisplayRows =
+    (rpcManagerRows.length
+      ? rpcManagerRows
+      : networkOptions.map((id) => ({
+          id,
+          primarySymbol: '',
+          addressFamily: '',
+          sharedAddressGroup: '',
+          supportsSend: true,
+          supportsBalance: true,
+          defaultRpcUrl: ''
+        }))
+    ).map((row) => {
+      const id = normalizeNetworkId(row.id);
+      const cfg = NETWORK_CONFIG[id] || fallbackNetworkConfig(id);
+      const overrideRpcUrl = rpcOverrideMap[id] || '';
+      const defaultRpcUrl = row.defaultRpcUrl || '';
+      const effectiveRpcUrl = overrideRpcUrl || defaultRpcUrl;
+      const draftRpcUrl =
+        rpcDraftByNetwork[id] !== undefined ? rpcDraftByNetwork[id] : overrideRpcUrl || defaultRpcUrl;
+      return {
+        ...row,
+        id,
+        title: networkDisplayNames[id] || cfg.title,
+        nativeSymbol: row.primarySymbol || cfg.nativeSymbol || '',
+        defaultRpcUrl,
+        overrideRpcUrl,
+        effectiveRpcUrl,
+        draftRpcUrl
+      };
+    });
 
   useEffect(() => {
     setNativeAddressInput('');
@@ -653,6 +773,17 @@ export default function App() {
     const timer = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!isRpcManagerOpen) return undefined;
+    function onKeyDown(event) {
+      if (event.key === 'Escape') {
+        closeRpcManager();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isRpcManagerOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -905,6 +1036,159 @@ export default function App() {
     setToast(msg);
   }
 
+  async function refreshRpcManagerPanel() {
+    setRpcManagerLoading(true);
+    setRpcManagerError('');
+
+    let actor = null;
+    try {
+      actor = await loadBackendActor();
+    } catch {
+      actor = null;
+    }
+
+    if (!actor) {
+      setRpcManagerRows([]);
+      setRpcOverrideRows([]);
+      setRpcManagerError('前端未连接到 backend actor');
+      setRpcManagerLoading(false);
+      return;
+    }
+
+    const [walletRows, overrideRows] = await Promise.all([
+      queryWalletNetworks(actor),
+      queryConfiguredRpcs(actor)
+    ]);
+
+    setRpcManagerRows(walletRows);
+    setRpcOverrideRows(overrideRows);
+    setRpcDraftByNetwork((prev) => {
+      const next = { ...prev };
+      const seen = new Set();
+      for (const row of walletRows) {
+        const id = normalizeNetworkId(row.id);
+        if (!id) continue;
+        seen.add(id);
+        const override = overrideRows.find((item) => normalizeNetworkId(item.network) === id)?.rpcUrl || '';
+        const fallback = row.defaultRpcUrl || '';
+        if (!(id in next)) next[id] = override || fallback;
+      }
+      for (const row of overrideRows) {
+        const id = normalizeNetworkId(row.network);
+        if (!id || seen.has(id)) continue;
+        if (!(id in next)) next[id] = row.rpcUrl || '';
+      }
+      return next;
+    });
+    setRpcManagerLoading(false);
+  }
+
+  function openRpcManager() {
+    setIsRpcManagerOpen(true);
+    void refreshRpcManagerPanel();
+  }
+
+  function closeRpcManager() {
+    setIsRpcManagerOpen(false);
+    setRpcManagerError('');
+    setRpcSavingNetwork('');
+    setRpcRemovingNetwork('');
+  }
+
+  function handleRpcDraftChange(network, value) {
+    const id = normalizeNetworkId(network);
+    setRpcDraftByNetwork((prev) => ({ ...prev, [id]: value }));
+  }
+
+  async function handleRpcSaveClick(network) {
+    const id = normalizeNetworkId(network);
+    const rpcUrl = String(rpcDraftByNetwork[id] || '').trim();
+    if (!rpcUrl) {
+      const msg = `请输入 ${id} 的 RPC 地址`;
+      setRpcManagerError(msg);
+      setToast(msg);
+      setStatusText(msg);
+      return;
+    }
+
+    let actor = null;
+    try {
+      actor = await loadBackendActor();
+    } catch {
+      actor = null;
+    }
+    if (!actor) {
+      const msg = '前端未连接到 backend actor';
+      setRpcManagerError(msg);
+      setToast(msg);
+      setStatusText(msg);
+      return;
+    }
+
+    setRpcSavingNetwork(id);
+    const res = await upsertConfiguredRpc(actor, id, rpcUrl);
+    setRpcSavingNetwork('');
+    if (!res.ok) {
+      const msg = `设置 RPC 失败 (${id}): ${res.error}`;
+      setRpcManagerError(msg);
+      setToast(msg);
+      setStatusText(msg);
+      return;
+    }
+
+    setRpcOverrideRows((prev) => {
+      const next = prev.filter((row) => normalizeNetworkId(row.network) !== id);
+      next.push({ network: id, rpcUrl });
+      return next;
+    });
+    const msg = `已设置 ${id} RPC`;
+    setRpcManagerError('');
+    setStatusText(msg);
+    setToast(msg);
+  }
+
+  async function handleRpcRemoveClick(network) {
+    const id = normalizeNetworkId(network);
+
+    let actor = null;
+    try {
+      actor = await loadBackendActor();
+    } catch {
+      actor = null;
+    }
+    if (!actor) {
+      const msg = '前端未连接到 backend actor';
+      setRpcManagerError(msg);
+      setToast(msg);
+      setStatusText(msg);
+      return;
+    }
+
+    setRpcRemovingNetwork(id);
+    const res = await deleteConfiguredRpc(actor, id);
+    setRpcRemovingNetwork('');
+    if (!res.ok) {
+      const msg = `删除 RPC 失败 (${id}): ${res.error}`;
+      setRpcManagerError(msg);
+      setToast(msg);
+      setStatusText(msg);
+      return;
+    }
+
+    setRpcOverrideRows((prev) => prev.filter((row) => normalizeNetworkId(row.network) !== id));
+    setRpcDraftByNetwork((prev) => {
+      const next = { ...prev };
+      const row = rpcManagerRows.find((item) => normalizeNetworkId(item.id) === id);
+      next[id] = row?.defaultRpcUrl || '';
+      return next;
+    });
+
+    const msg = res.removed ? `已删除 ${id} RPC 覆盖` : `${id} 没有可删除的 RPC 覆盖`;
+    setRpcManagerError('');
+    setStatusText(msg);
+    setToast(msg);
+  }
+
   const nativeBalanceValue =
     nativeBalanceState.phase === 'loading'
       ? '查询中...'
@@ -1058,12 +1342,12 @@ export default function App() {
         return;
       }
 
-      const results = await Promise.all(
-        pendingTokens.map(async (token) => {
-          const resp = await queryBalance(actor, selectedNetwork, account, token.tokenAddress);
-          return { tokenAddress: token.tokenAddress, resp };
-        })
-      );
+      const results = [];
+      for (const token of pendingTokens) {
+        if (cancelled) return;
+        const resp = await queryBalance(actor, selectedNetwork, account, token.tokenAddress);
+        results.push({ tokenAddress: token.tokenAddress, resp });
+      }
       if (cancelled) return;
 
       setTokenRowBalances((prev) => {
@@ -1332,6 +1616,10 @@ export default function App() {
             </select>
           </label>
 
+          <button type="button" className="button button--ghost" onClick={openRpcManager}>
+            RPC 管理
+          </button>
+
           <button type="button" className="button button--ghost" onClick={handleLoginClick}>
             登录
           </button>
@@ -1446,6 +1734,132 @@ export default function App() {
           </section>
         </section>
       </main>
+
+      {isRpcManagerOpen && (
+        <div className="rpc-manager-modal" role="dialog" aria-modal="true" aria-label="RPC 管理">
+          <div className="rpc-manager-modal__backdrop" onClick={closeRpcManager} aria-hidden="true" />
+          <section className="panel rpc-manager-modal__panel">
+            <div className="rpc-manager-modal__shell">
+              <header className="rpc-manager-modal__head">
+                <div>
+                  <p className="asset-card__eyebrow">RPC MANAGER</p>
+                  <h2>链路 RPC 配置</h2>
+                  <p className="rpc-manager-modal__sub">
+                    显示所有链的默认 RPC 与当前覆盖配置。保存后会写入 canister runtime state。
+                  </p>
+                </div>
+                <div className="rpc-manager-modal__head-actions">
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={() => void refreshRpcManagerPanel()}
+                    disabled={rpcManagerLoading}
+                  >
+                    {rpcManagerLoading ? '刷新中...' : '刷新'}
+                  </button>
+                  <button type="button" className="button button--ghost" onClick={closeRpcManager}>
+                    关闭
+                  </button>
+                </div>
+              </header>
+
+              <div className="rpc-manager-modal__body">
+                {rpcManagerError && <div className="rpc-manager-alert">{rpcManagerError}</div>}
+
+                <div className="rpc-manager-list" role="list" aria-label="RPC 配置列表">
+                  {rpcManagerDisplayRows.map((row) => {
+                    const hasOverride = Boolean(row.overrideRpcUrl);
+                    const saveBusy = rpcSavingNetwork === row.id;
+                    const removeBusy = rpcRemovingNetwork === row.id;
+                    const noExternalRpc = !row.defaultRpcUrl && row.id === 'internet_computer';
+
+                    return (
+                      <section className="rpc-manager-row" key={row.id} role="listitem">
+                        <div className="rpc-manager-row__top">
+                          <div>
+                            <div className="rpc-manager-row__title">{row.title}</div>
+                            <div className="rpc-manager-row__meta">
+                              <code>{row.id}</code>
+                              {row.nativeSymbol ? <span>{row.nativeSymbol}</span> : null}
+                              {row.addressFamily ? <span>{row.addressFamily}</span> : null}
+                            </div>
+                          </div>
+                          <div className="rpc-manager-row__badges">
+                            {hasOverride ? (
+                              <span className="pill pill--glow">Override</span>
+                            ) : (
+                              <span className="pill">Default</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rpc-manager-row__grid">
+                          <div className="rpc-manager-kv">
+                            <div className="asset-card__label">默认 RPC</div>
+                            <div className="mono-block rpc-manager-kv__value">
+                              {row.defaultRpcUrl || '无（该链不依赖外部 RPC 或未配置）'}
+                            </div>
+                          </div>
+
+                          <div className="rpc-manager-kv">
+                            <div className="asset-card__label">当前覆盖（override）</div>
+                            <div className="mono-block rpc-manager-kv__value">
+                              {row.overrideRpcUrl || '未设置'}
+                            </div>
+                          </div>
+
+                          <div className="rpc-manager-kv rpc-manager-kv--full">
+                            <div className="asset-card__label">生效中的 RPC</div>
+                            <div className="mono-block rpc-manager-kv__value">
+                              {row.effectiveRpcUrl || '无'}
+                            </div>
+                          </div>
+
+                          <label className="rpc-manager-field rpc-manager-kv--full">
+                            <span className="asset-card__label">设置 / 覆盖 RPC（HTTPS）</span>
+                            <input
+                              value={row.draftRpcUrl}
+                              onChange={(event) => handleRpcDraftChange(row.id, event.target.value)}
+                              placeholder={`为 ${row.id} 输入 https:// RPC URL`}
+                              spellCheck={false}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="rpc-manager-row__actions">
+                          <button
+                            type="button"
+                            className="button button--primary"
+                            onClick={() => void handleRpcSaveClick(row.id)}
+                            disabled={saveBusy}
+                          >
+                            {saveBusy ? '保存中...' : hasOverride ? '更新 Override' : '添加 Override'}
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--ghost"
+                            onClick={() => void handleRpcRemoveClick(row.id)}
+                            disabled={removeBusy || !hasOverride}
+                          >
+                            {removeBusy ? '删除中...' : '删除 Override'}
+                          </button>
+                          {noExternalRpc ? (
+                            <span className="rpc-manager-row__hint">该链通常不使用外部 RPC。</span>
+                          ) : null}
+                        </div>
+                      </section>
+                    );
+                  })}
+
+                  {!rpcManagerDisplayRows.length && !rpcManagerLoading && (
+                    <div className="mono-block">未读取到链配置（请确认前端已连接 backend actor）</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {detailAsset && (
         <div className="token-detail-modal" role="dialog" aria-modal="true" aria-label="Token 详情">

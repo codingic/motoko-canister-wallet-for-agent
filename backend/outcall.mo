@@ -6,16 +6,6 @@ import AppConfig "./config/app_config";
 import WalletError "./error";
 
 module {
-  public type TransformArgs = {
-    response : HttpRequestResult;
-    context : Blob;
-  };
-
-  public type TransformContext = {
-    function : shared query TransformArgs -> async HttpRequestResult;
-    context : Blob;
-  };
-
   public type HttpHeader = {
     name : Text;
     value : Text;
@@ -37,7 +27,6 @@ module {
     method : HttpMethod;
     headers : [HttpHeader];
     body : ?Blob;
-    transform : ?TransformContext;
   };
 
   public type HttpRequestResult = {
@@ -55,7 +44,7 @@ module {
     op : Text,
   ) : async WalletError.WalletResult<HttpRequestResult> {
     try {
-      let resp = await (with cycles = AppConfig.default_http_cycles()) IC00.http_request(args);
+      let resp = await (with cycles = attached_http_cycles(args.max_response_bytes)) IC00.http_request(args);
       #Ok(resp)
     } catch e {
       #Err(#Internal(op # " http outcall failed: " # MoError.message(e)))
@@ -86,7 +75,6 @@ module {
       method;
       headers;
       body;
-      transform = null;
     };
     await http_request(args, op)
   };
@@ -125,8 +113,21 @@ module {
         { name = "accept"; value = accept },
       ];
       body = ?body;
-      transform = null;
     };
     await http_request(args, op)
+  };
+
+  // Motoko does not auto-attach canister-http cycles like Rust's helper path may effectively do.
+  // Scale attached cycles by response cap so small RPC calls do not fail with "out of cycles".
+  func attached_http_cycles(max_response_bytes : ?Nat64) : Nat {
+    let base = AppConfig.default_http_cycles();
+    let responseCap = switch (max_response_bytes) {
+      case (?n) Nat64.toNat(n);
+      case null 64 * 1024;
+    };
+    // Conservative estimate; unused cycles are refunded. Tuned lower to reduce temporary
+    // burst pressure when multiple UI requests run concurrently.
+    let perByte : Nat = 10_000_000;
+    base + (responseCap * perByte)
   };
 }

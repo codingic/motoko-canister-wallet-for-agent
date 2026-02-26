@@ -363,6 +363,30 @@ persistent actor WalletBackend {
     }))
   };
 
+  func trimmedOptTextNonEmpty(v : ?Text) : ?Text {
+    switch (v) {
+      case null null;
+      case (?t0) {
+        let t = Text.trim(t0, #char ' ');
+        if (Text.size(t) == 0) null else ?t
+      };
+    }
+  };
+
+  func requireNativeTransferMethodTokenAbsent(methodName : Text, req : TransferRequest) : ?WalletError {
+    switch (trimmedOptTextNonEmpty(req.token)) {
+      case (?_) ?(#InvalidInput(methodName # " does not accept token parameter"));
+      case null null;
+    }
+  };
+
+  func requireTokenTransferMethodTokenPresent(methodName : Text, req : TransferRequest) : ?WalletError {
+    switch (trimmedOptTextNonEmpty(req.token)) {
+      case (?_) null;
+      case null ?(#InvalidInput("token is required for " # methodName));
+    }
+  };
+
   func isPaused() : Bool { State.is_paused(state_) };
 
   func nativeDecimalsFor(network : Text) : Nat8 {
@@ -1003,6 +1027,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func tron_transfer_trx(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireNativeTransferMethodTokenAbsent("tron_transfer_trx", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Trx.transfer_with_rpc(rpcOverrideFor("tron"), {
       from = req.from;
       to = req.to;
@@ -1015,6 +1043,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func tron_transfer_trc20(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireTokenTransferMethodTokenPresent("tron_transfer_trc20", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Trx.transfer_with_rpc(rpcOverrideFor("tron"), {
       from = req.from;
       to = req.to;
@@ -1051,6 +1083,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func near_mainnet_transfer_near(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireNativeTransferMethodTokenAbsent("near_mainnet_transfer_near", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Near.transfer_with_rpc(rpcOverrideFor("near_mainnet"), {
       from = req.from;
       to = req.to;
@@ -1063,6 +1099,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func near_mainnet_transfer_nep141(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireTokenTransferMethodTokenPresent("near_mainnet_transfer_nep141", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Near.transfer_with_rpc(rpcOverrideFor("near_mainnet"), {
       from = req.from;
       to = req.to;
@@ -1075,6 +1115,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func aptos_mainnet_transfer_apt(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireNativeTransferMethodTokenAbsent("aptos_mainnet_transfer_apt", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Aptos.transfer_with_rpc(rpcOverrideFor("aptos_mainnet"), {
       from = req.from;
       to = req.to;
@@ -1087,6 +1131,10 @@ persistent actor WalletBackend {
   };
   public shared ({ caller }) func aptos_mainnet_transfer_token(req : TransferRequest) : async WalletResult<TransferResponse> {
     ignore caller;
+    switch (requireTokenTransferMethodTokenPresent("aptos_mainnet_transfer_token", req)) {
+      case (?err) return #Err(err);
+      case null {};
+    };
     fromTypesTransferResult(await _Aptos.transfer_with_rpc(rpcOverrideFor("aptos_mainnet"), {
       from = req.from;
       to = req.to;

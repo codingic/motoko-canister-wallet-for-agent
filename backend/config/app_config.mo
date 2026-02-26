@@ -38,7 +38,10 @@ module {
   };
 
   public func default_http_cycles() : Nat {
-    30_000_000_000;
+    // Base floor for canister-http attached cycles. Final amount is scaled in outcall.mo
+    // by max_response_bytes. Keep the floor modest to avoid burst exhaustion when the UI
+    // triggers multiple parallel RPCs on initial load.
+    50_000_000_000;
   };
 
   public func default_ecdsa_key_name() : Text {

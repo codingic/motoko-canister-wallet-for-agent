@@ -137,7 +137,7 @@ module {
     switch (req.token) {
       case (?t) {
         if (Text.size(Text.trim(t, #char ' ')) > 0) {
-          return #Err(#InvalidInput("btc_get_balance_btc does not accept token parameter"));
+          return #Err(#InvalidInput("bitcoin_get_balance_btc does not accept token parameter"));
         };
       };
       case null {};
@@ -205,7 +205,7 @@ module {
     switch (req.token) {
       case (?t) {
         if (Text.size(Text.trim(t, #char ' ')) > 0) {
-          return #Err(#InvalidInput("btc_transfer_btc does not accept token parameter"));
+          return #Err(#InvalidInput("bitcoin_transfer_btc does not accept token parameter"));
         };
       };
       case null {};
@@ -899,7 +899,7 @@ module {
       case (#ok(url)) url;
       case (#err(msg)) return #Err(#Internal("btc rpc url resolution failed: " # msg));
     };
-    let httpRes = switch (await Outcall.get_json(rpcBase # path, 512 * 1024 : Nat64, "btc rpc")) {
+    let httpRes = switch (await Outcall.get_json(rpcBase # path, btc_rpc_max_response_bytes_for_path(path), "btc rpc")) {
       case (#Err(err)) return #Err(err);
       case (#Ok(resp)) resp;
     };
@@ -941,6 +941,27 @@ module {
       case (?t) #Ok(Text.trim(t, #char ' '));
       case null #Err(#Internal("btc rpc response is not utf8"));
     }
+  };
+
+  func btc_rpc_max_response_bytes_for_path(path : Text) : Nat64 {
+    if (path == "/fee-estimates") {
+      return 8 * 1024 : Nat64;
+    };
+    switch (Text.stripEnd(path, #text "/utxo")) {
+      case (?_) {
+        // UTXO lists can be larger than address summary responses.
+        return 128 * 1024 : Nat64;
+      };
+      case null {};
+    };
+    switch (Text.stripStart(path, #text "/address/")) {
+      case (?_) {
+        // Address summary used by balance query is small.
+        return 16 * 1024 : Nat64;
+      };
+      case null {};
+    };
+    64 * 1024 : Nat64
   };
 
   func parse_txid_hex_to_bytes(txid_hex : Text) : Error.WalletResult<[Nat8]> {

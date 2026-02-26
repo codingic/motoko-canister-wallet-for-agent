@@ -142,10 +142,26 @@ module {
   };
 
   public func transfer_sui(req : Types.TransferRequest) : async Error.WalletResult<Types.TransferResponse> {
+    switch (req.token) {
+      case (?t) {
+        if (Text.size(Text.trim(t, #char ' ')) > 0) {
+          return #Err(#InvalidInput("sui_mainnet_transfer_sui does not accept token parameter"));
+        };
+      };
+      case null {};
+    };
     await transfer_impl(req, null)
   };
 
   public func transfer_token(req : Types.TransferRequest) : async Error.WalletResult<Types.TransferResponse> {
+    switch (req.token) {
+      case (?t) {
+        if (Text.size(Text.trim(t, #char ' ')) == 0) {
+          return #Err(#InvalidInput("token is required for sui token transfer"));
+        };
+      };
+      case null return #Err(#InvalidInput("token is required for sui token transfer"));
+    };
     await transfer_impl(req, null)
   };
 
@@ -153,6 +169,14 @@ module {
     rpcOverride : ?Text,
     req : Types.TransferRequest,
   ) : async Error.WalletResult<Types.TransferResponse> {
+    switch (req.token) {
+      case (?t) {
+        if (Text.size(Text.trim(t, #char ' ')) > 0) {
+          return #Err(#InvalidInput("sui_mainnet_transfer_sui does not accept token parameter"));
+        };
+      };
+      case null {};
+    };
     await transfer_impl(req, rpcOverride)
   };
 
@@ -160,6 +184,14 @@ module {
     rpcOverride : ?Text,
     req : Types.TransferRequest,
   ) : async Error.WalletResult<Types.TransferResponse> {
+    switch (req.token) {
+      case (?t) {
+        if (Text.size(Text.trim(t, #char ' ')) == 0) {
+          return #Err(#InvalidInput("token is required for sui token transfer"));
+        };
+      };
+      case null return #Err(#InvalidInput("token is required for sui token transfer"));
+    };
     await transfer_impl(req, rpcOverride)
   };
 
@@ -815,7 +847,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl,
       Text.encodeUtf8(bodyText),
-      1024 * 1024 : Nat64,
+      sui_rpc_max_response_bytes_for_method(method),
       "sui rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -845,6 +877,19 @@ module {
     switch (json_object_field(payload, "result")) {
       case (?v) #Ok(v);
       case null #Err(#Internal("Sui RPC missing result"));
+    }
+  };
+
+  func sui_rpc_max_response_bytes_for_method(method : Text) : Nat64 {
+    switch (method) {
+      case ("suix_getReferenceGasPrice") 8 * 1024 : Nat64;
+      case ("suix_getBalance") 16 * 1024 : Nat64;
+      case ("suix_getCoinMetadata") 16 * 1024 : Nat64;
+      case ("suix_getCoins") 128 * 1024 : Nat64;
+      case ("unsafe_pay") 128 * 1024 : Nat64;
+      case ("unsafe_paySui") 128 * 1024 : Nat64;
+      case ("sui_executeTransactionBlock") 256 * 1024 : Nat64;
+      case (_) 128 * 1024 : Nat64;
     }
   };
 

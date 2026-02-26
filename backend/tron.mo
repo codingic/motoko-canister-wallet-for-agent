@@ -106,7 +106,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl # "/wallet/getaccount",
       Text.encodeUtf8(bodyText),
-      512 * 1024 : Nat64,
+      tron_rpc_max_response_bytes_for_path("wallet/getaccount"),
       "trx rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -943,7 +943,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl # "/" # path,
       Text.encodeUtf8(bodyText),
-      512 * 1024 : Nat64,
+      tron_rpc_max_response_bytes_for_path(path),
       "trx rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -963,6 +963,16 @@ module {
     switch (JsonAst.parse(payloadText)) {
       case (?v) #Ok(v);
       case null #Err(#Internal("parse trx rpc response failed"));
+    }
+  };
+
+  func tron_rpc_max_response_bytes_for_path(path : Text) : Nat64 {
+    switch (path) {
+      case ("wallet/getaccount") 16 * 1024 : Nat64;
+      case ("wallet/triggerconstantcontract") 64 * 1024 : Nat64;
+      case ("wallet/createtransaction") 32 * 1024 : Nat64;
+      case ("wallet/broadcasttransaction") 32 * 1024 : Nat64;
+      case (_) 64 * 1024 : Nat64;
     }
   };
 

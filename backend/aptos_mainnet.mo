@@ -114,7 +114,7 @@ module {
       case (#err(msg)) return #Err(#Internal("aptos rpc url resolution failed: " # msg));
     };
     let path = "/accounts/" # path_encode(account) # "/resource/" # path_encode(resourceType);
-    let httpRes = switch (await Outcall.get_json(rpcUrl # path, 1024 * 1024 : Nat64, "aptos rpc")) {
+    let httpRes = switch (await Outcall.get_json(rpcUrl # path, aptos_rpc_max_response_bytes_for_path(#get, path), "aptos rpc")) {
       case (#Err(err)) return #Err(err);
       case (#Ok(resp)) resp;
     };
@@ -545,7 +545,7 @@ module {
     };
     let resourceType = "0x1::coin::CoinInfo<" # normalized # ">";
     let path = "/accounts/" # path_encode(owner) # "/resource/" # path_encode(resourceType);
-    let httpRes = switch (await Outcall.get_json(rpcUrl # path, 1024 * 1024 : Nat64, "aptos rpc")) {
+    let httpRes = switch (await Outcall.get_json(rpcUrl # path, aptos_rpc_max_response_bytes_for_path(#get, path), "aptos rpc")) {
       case (#Err(_)) return null;
       case (#Ok(resp)) resp;
     };
@@ -645,13 +645,13 @@ module {
     let url = base # path;
     let httpRes = switch (bodyText) {
       case (?body) {
-        switch (await Outcall.post_json(url, Text.encodeUtf8(body), 1024 * 1024 : Nat64, "aptos rpc")) {
+        switch (await Outcall.post_json(url, Text.encodeUtf8(body), aptos_rpc_max_response_bytes_for_path(#post, path), "aptos rpc")) {
           case (#Err(err)) return #Err(err);
           case (#Ok(resp)) resp;
         }
       };
       case null {
-        switch (await Outcall.get_json(url, 1024 * 1024 : Nat64, "aptos rpc")) {
+        switch (await Outcall.get_json(url, aptos_rpc_max_response_bytes_for_path(#get, path), "aptos rpc")) {
           case (#Err(err)) return #Err(err);
           case (#Ok(resp)) resp;
         }
@@ -675,6 +675,24 @@ module {
       case null {};
     };
     #Ok(parsed)
+  };
+
+  func aptos_rpc_max_response_bytes_for_path(method : Outcall.HttpMethod, path : Text) : Nat64 {
+    if (path == "/") return 16 * 1024 : Nat64;
+    if (path == "/estimate_gas_price") return 16 * 1024 : Nat64;
+    if (path == "/transactions/signing_message") return 64 * 1024 : Nat64;
+    if (path == "/transactions") {
+      switch (method) {
+        case (#post) return 128 * 1024 : Nat64;
+        case (#get) return 64 * 1024 : Nat64;
+        case (_) return 128 * 1024 : Nat64;
+      }
+    };
+    if (Text.startsWith(path, #text "/accounts/") and Text.contains(path, #text "/resource/")) {
+      return 64 * 1024 : Nat64;
+    };
+    if (Text.startsWith(path, #text "/accounts/")) return 32 * 1024 : Nat64;
+    128 * 1024 : Nat64
   };
 
   func parse_decimal_units(value : Text, decimals : Nat) : Error.WalletResult<Nat> {

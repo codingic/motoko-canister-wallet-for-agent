@@ -47,6 +47,29 @@
 - APT / Aptos token
 - SUI / Sui token
 
+## 前端功能说明
+
+- 主界面支持按网络查看地址、原生币余额、Token 列表与发送交易
+- 已新增 `RPC 管理` 全屏面板（前端）
+  - 查看所有链默认 RPC
+  - 查看/设置/删除每条链的 runtime RPC override
+  - `set_configured_rpc/remove_configured_rpc` 会写入后端状态，并影响实际 RPC 请求（外部 RPC 链）
+- 前端 Token 余额查询已改为串行请求，以降低 `canister_http` 并发峰值导致的 cycles 压力
+
+## 发送交易行为说明（当前实现）
+
+- 当前实现为：`后端签名并广播`（不是前端广播）
+- 外部 RPC 链（EVM / BTC / Solana / TRON / TON / NEAR / Aptos / Sui）由后端完成签名与广播
+- `internet_computer`（ICP / ICRC）必须由后端 canister 调 ledger 发送（前端无法代表 canister principal）
+- 已在后端入口层补充 native/token 方法语义校验，避免错误地把 token 参数传给 native 方法（以及反向情况）
+
+## 近期稳定性修复（canister_http / cycles）
+
+- 后端 `canister_http` 附加 cycles 改为按 `max_response_bytes` 动态估算（并下调估算强度）
+- 各链模块（EVM / BTC / Solana / TRON / NEAR / Aptos / Sui / TON）已按方法/路径分级设置 `max_response_bytes`
+- 目的：减少并发查询时的临时 cycles 预扣峰值，降低 `IC0504 ... out of cycles`
+- 详见排障文档：`/docs/CANISTER_HTTP_OUTCALL_CYCLES.md`
+
 ## 运行与构建
 
 ### 后端编译检查
@@ -91,8 +114,13 @@ npm run build
 - 当前为代码迁移与编译通过状态
 - 仍建议按链逐条进行实网发送/余额回归测试
 
+### 4. canister_http / cycles / 并发查询问题排查文档
+
+- 详见：`/docs/CANISTER_HTTP_OUTCALL_CYCLES.md`
+
 ## 目录说明
 
 - `/backend`：Motoko 后端（链模块、签名、RPC、SDK）
 - `/frontend`：前端调试界面（已对齐 Rust 风格接口名）
 - `/src/declarations`：`dfx generate` 生成的前端声明（建议本地生成）
+- `/docs/CANISTER_HTTP_OUTCALL_CYCLES.md`：`canister_http` / cycles / 并发查询问题说明与解决办法

@@ -166,7 +166,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl,
       Text.encodeUtf8(bodyText),
-      1024 * 1024 : Nat64,
+      near_rpc_max_response_bytes_for_query_request_type("view_account"),
       "near rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -544,7 +544,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       base,
       Text.encodeUtf8(bodyText),
-      1024 * 1024 : Nat64,
+      near_rpc_max_response_bytes_for_method(method),
       "near rpc",
     )) {
       case (#Err(err)) return #Err(err);
@@ -857,6 +857,24 @@ module {
     Array.reverse(Buffer.toArray(out))
   };
 
+  func near_rpc_max_response_bytes_for_method(method : Text) : Nat64 {
+    switch (method) {
+      case ("status") 16 * 1024 : Nat64;
+      case ("query") 64 * 1024 : Nat64;
+      case ("broadcast_tx_commit") 256 * 1024 : Nat64;
+      case (_) 128 * 1024 : Nat64;
+    }
+  };
+
+  func near_rpc_max_response_bytes_for_query_request_type(requestType : Text) : Nat64 {
+    switch (requestType) {
+      case ("view_account") 16 * 1024 : Nat64;
+      case ("view_access_key") 32 * 1024 : Nat64;
+      case ("call_function") 64 * 1024 : Nat64;
+      case (_) 64 * 1024 : Nat64;
+    }
+  };
+
   func near_call_function_bytes(
     rpcUrl : Text,
     accountId : Text,
@@ -874,7 +892,7 @@ module {
     let httpRes = switch (await Outcall.post_json(
       rpcUrl,
       Text.encodeUtf8(bodyText),
-      1024 * 1024 : Nat64,
+      near_rpc_max_response_bytes_for_query_request_type("call_function"),
       "near rpc",
     )) {
       case (#Err(err)) return #Err(err);
